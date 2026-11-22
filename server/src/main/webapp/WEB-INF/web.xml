@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+         version="4.0">
+
+    <servlet>
+        <servlet-name>FieldServlet</servlet-name>
+        <servlet-class>ua.edu.nupp.kpp.server.FieldServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>FieldServlet</servlet-name>
+        <url-pattern>/fields</url-pattern>
+    </servlet-mapping>
+
+    <servlet>
+        <servlet-name>ObservationServlet</servlet-name>
+        <servlet-class>ua.edu.nupp.kpp.server.ObservationServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>ObservationServlet</servlet-name>
+        <url-pattern>/observations</url-pattern>
+    </servlet-mapping>
+
+    <servlet>
+        <servlet-name>ProblemServlet</servlet-name>
+        <servlet-class>ua.edu.nupp.kpp.server.ProblemServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>ProblemServlet</servlet-name>
+        <url-pattern>/problems</url-pattern>
+    </servlet-mapping>
+
+    <servlet>
+        <servlet-name>TreatmentActionServlet</servlet-name>
+        <servlet-class>ua.edu.nupp.kpp.server.TreatmentActionServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>TreatmentActionServlet</servlet-name>
+        <url-pattern>/actions</url-pattern>
+    </servlet-mapping>
+
+</web-app>
