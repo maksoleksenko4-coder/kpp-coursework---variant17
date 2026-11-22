@@ -5,6 +5,13 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public final class DBUtil {
+    static {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException("MySQL JDBC драйвер не знайдено", e);
+        }
+    }
 
     private static final String URL = "jdbc:mysql://localhost:3306/field_monitoring";
     private static final String USER = "root";
