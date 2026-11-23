@@ -5,6 +5,7 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
@@ -12,15 +13,15 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class MainApp extends Application {
+
+    private static final Logger LOG = Logger.getLogger(MainApp.class.getName());
 
     private final ApiClient api = new ApiClient();
 
@@ -41,7 +42,7 @@ public class MainApp extends Application {
                 createActionsTab()
         );
 
-        Scene scene = new Scene(tabPane, 1000, 620);
+        Scene scene = new Scene(tabPane, 1000, 640);
         stage.setTitle("Моніторинг сільськогосподарських полів (Клієнт)");
         stage.setScene(scene);
         stage.show();
@@ -224,24 +225,62 @@ public class MainApp extends Application {
         Button refreshBtn = new Button("Оновити");
         refreshBtn.setOnAction(e -> refreshObservations());
 
-        Button importCsvBtn = new Button("Імпорт CSV (тест)");
-        importCsvBtn.setOnAction(e -> safe(() -> {
-            ObservationDto obs = readTestObservation();
-            Map<String, String> p = new LinkedHashMap<>();
-            p.put("action", "add");
-            p.put("fieldId", String.valueOf(obs.getFieldId()));
-            p.put("date", obs.getDate());
-            p.put("description", obs.getDescription());
-            p.put("f1Score", String.valueOf(obs.getF1Score()));
-            p.put("f2Score", String.valueOf(obs.getF2Score()));
-            p.put("f3Score", String.valueOf(obs.getF3Score()));
-            api.postForm("/observations", p);
-            refreshObservations();
-        }));
+        // Фоновий CSV-імпорт (Етап IV)
+        Button importCsvBtn = new Button("Імпортувати CSV");
+        ProgressBar progressBar = new ProgressBar(0);
+        progressBar.setPrefWidth(180);
+        Label statusLabel = new Label("CSV не імпортовано");
+
+        importCsvBtn.setOnAction(e -> {
+            importCsvBtn.setDisable(true);
+            ImportObservationsTask task = new ImportObservationsTask(
+                    Path.of("sample-data", "observations.csv"), api);
+
+            progressBar.progressProperty().bind(task.progressProperty());
+            statusLabel.textProperty().bind(task.messageProperty());
+
+            task.setOnSucceeded(ev -> {
+                progressBar.progressProperty().unbind();
+                statusLabel.textProperty().unbind();
+                progressBar.setProgress(1.0);
+                statusLabel.setText("Готово. Імпортовано: " + task.getValue());
+                importCsvBtn.setDisable(false);
+                refreshObservations();
+            });
+
+            task.setOnFailed(ev -> {
+                progressBar.progressProperty().unbind();
+                statusLabel.textProperty().unbind();
+                progressBar.setProgress(0);
+                importCsvBtn.setDisable(false);
+                Throwable ex = task.getException();
+                LOG.log(Level.SEVERE, "CSV Import Error", ex);
+                String msg = (ex != null && ex.getMessage() != null && !ex.getMessage().isBlank())
+                        ? ex.getMessage()
+                        : "Error while importing CSV (check if Tomcat is running)";
+                statusLabel.setText("Import error");
+                showError(msg);
+            });
+
+            task.setOnCancelled(ev -> {
+                progressBar.progressProperty().unbind();
+                statusLabel.textProperty().unbind();
+                progressBar.setProgress(0);
+                statusLabel.setText("Імпорт скасовано; частина записів могла бути збережена");
+                importCsvBtn.setDisable(false);
+            });
+
+            Thread thread = new Thread(task, "csv-import");
+            thread.setDaemon(true);
+            thread.start();
+        });
 
         HBox row1 = new HBox(8, fieldIdInput, dateInput, descInput, f1Input, f2Input, f3Input);
-        HBox row2 = new HBox(8, addBtn, updateBtn, deleteBtn, refreshBtn, importCsvBtn);
-        VBox form = new VBox(8, row1, row2);
+        HBox row2 = new HBox(8, addBtn, updateBtn, deleteBtn, refreshBtn);
+        HBox row3 = new HBox(10, importCsvBtn, progressBar, statusLabel);
+        row3.setAlignment(Pos.CENTER_LEFT);
+
+        VBox form = new VBox(8, row1, row2, row3);
         form.setPadding(new Insets(10));
 
         BorderPane pane = new BorderPane(obsTable);
@@ -445,28 +484,6 @@ public class MainApp extends Application {
         return new Tab("Заходи", pane);
     }
 
-    private ObservationDto readTestObservation() throws IOException {
-        Path file = Path.of("sample-data", "observations.csv");
-        List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-        if (lines.size() < 2) {
-            throw new IllegalArgumentException("CSV-файл не містить даних");
-        }
-        String line = lines.get(1);
-        String[] parts = line.split(";", -1);
-        if (parts.length != 6) {
-            throw new IllegalArgumentException("Некоректна кількість стовпців: " + parts.length);
-        }
-
-        ObservationDto obs = new ObservationDto();
-        obs.setFieldId(Long.parseLong(parts[0].trim()));
-        obs.setDate(parts[1].trim());
-        obs.setDescription(parts[2].trim());
-        obs.setF1Score(Double.parseDouble(parts[3].trim()));
-        obs.setF2Score(Double.parseDouble(parts[4].trim()));
-        obs.setF3Score(Double.parseDouble(parts[5].trim()));
-        return obs;
-    }
-
     private void refreshAll() {
         refreshFields();
         refreshObservations();
@@ -499,9 +516,10 @@ public class MainApp extends Application {
         try {
             action.run();
         } catch (Exception ex) {
+            LOG.log(Level.WARNING, "Client operation error", ex);
             String msg = (ex.getMessage() != null && !ex.getMessage().isBlank())
                     ? ex.getMessage()
-                    : ex.getClass().getSimpleName() + " (перевірте, чи запущений Tomcat)";
+                    : ex.getClass().getSimpleName() + " (check if Tomcat is running)";
             showError(msg);
         }
     }
