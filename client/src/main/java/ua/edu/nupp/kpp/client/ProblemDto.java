@@ -1,15 +1,23 @@
 package ua.edu.nupp.kpp.client;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ProblemDto {
     private Long id;
     private long observationId;
     private String state;
+
+    @JsonProperty("f1")
     private double f1Score;
+
+    @JsonProperty("f2")
     private double f2Score;
+
+    @JsonProperty("f3")
     private double f3Score;
+
     private double riskIndex;
 
     public Long getId() { return id; }
